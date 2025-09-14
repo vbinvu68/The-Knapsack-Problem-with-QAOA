@@ -43,6 +43,70 @@ Our goal: maximize total impact without exceeding the budget.
 
 **Optimize: Budget Impact Score**
 
-### Our approach
+## Our approach
 
-In our solution, we will start with tackle the challenge with smaller 5-project problem first, then try to deal with a fully-project problem. First, we will try to solve the combinatoire problem classically, we will show the limitation of this method as the number of projects increases in classical computers. In quantum computers, we will use two common methods for encoding constraints : slack variables and unbalanced penalization. The The slack variable method is the most common method for solving 
+In our solution, we will start with tackle the challenge with smaller 5-project problem first, then try to deal with a fully-project problem. First, we will try to solve the combinatoire problem classically, we will show the limitation of this method as the number of projects increases in classical computers. In quantum computers, we will use two common methods for encoding constraints : slack variables and unbalanced penalization.
+
+Problem -------> QUBO representation --------> QAOA
+
+### QUBO Formulation
+
+To solve this problem with a quantum algorithm, we must first translate it into a **QUBO (Quadratic Unconstrained Binary Optimization)** format. A QUBO is a specific type of optimization problem that uses binary variables and is the native format for many quantum computing and annealing approaches.
+
+#### General Form
+The goal of a QUBO is to find the binary vector $\mathbf{x}$ (where each $x_i$ is either 0 or 1) that minimizes the objective function:
+
+$$
+\min_{\mathbf{x}} \mathbf{x}^T Q \mathbf{x} = \min_{\mathbf{x}} \left( \sum_{i} Q_{ii}x_i + \sum_{i<j} Q_{ij}x_i x_j \right)
+$$
+
+where:
+- $\mathbf{x}$ is the vector of binary decision variables ($x_i = 1$ if we select item $i$, and $0$ otherwise).
+- $Q$ is an upper-triangular matrix that encodes the problem's objective and constraints. The diagonal terms ($Q_{ii}$) represent linear costs, and the off-diagonal terms ($Q_{ij}$) represent quadratic costs.
+
+#### Applying QUBO to the Knapsack Problem
+Our problem has two parts: an objective to maximize and a constraint to obey. Both must be encoded into the $Q$ matrix.
+
+1.  **Objective:** We want to maximize the total impact score, $\sum_i v_i x_i$. Since QUBOs are designed to *minimize*, we flip the sign and aim to minimize $-\sum_i v_i x_i$. These terms contribute to the diagonal elements of the $Q$ matrix ($Q_{ii}$).
+
+2.  **Constraint:** We have a budget constraint, $\sum_j w_j x_j \le W_{max}$. QUBOs are *unconstrained*, so we enforce this rule by adding a **penalty term** to our objective function. This term is designed to be zero if the constraint is satisfied and a large positive number if it's violated. A common way to do this is by introducing slack variables to create an equality, which is then squared and added to the objective with a penalty factor $\lambda$:
+
+$$
+\text{Objective}_{\text{QUBO}} = -\sum_i v_i x_i + \lambda \left( \sum_j w_j x_j + s - W_{max} \right)^2
+$$
+
+When expanded, this penalty term creates the quadratic ($x_i x_j$) interactions that populate the off-diagonal elements of the $Q$ matrix. By finding the binary vector $\mathbf{x}$ that minimizes this combined objective, we find the set of items that maximizes the impact score while respecting the budget.
+### Solving with quantum Approximate Optimization Algorithm (QAOA)
+
+The core idea is to prepare a quantum state by repeatedly applying two distinct operators: a **problem Hamiltonian** and a **mixer Hamiltonian**.
+
+#### 1. Initialization
+First, we initialize the qubits in an equal superposition of all possible computational basis states. For a system of $n$ qubits, this state $|\psi_0\rangle$ is created by applying a Hadamard gate ($H$) to each qubit, starting from the $|0\rangle^{\otimes n}$ state:
+
+$$|\psi_0\rangle = H^{\otimes n} |0\rangle^{\otimes n} = \frac{1}{\sqrt{2^n}} \sum_{z=0}^{2^n-1} |z\rangle$$
+
+#### 2. Applying the Unitary Operators
+The algorithm proceeds by applying a sequence of two unitary operators for $p$ layers.
+
+* **The Problem Hamiltonian ($U_C$)**: This unitary encodes the cost function of the problem, which we want to minimize. It is derived from the problem Hamiltonian $H_C$ (QUBO formulation in our case) and is applied for a duration determined by the parameter $\gamma$:
+
+    $$
+    U_C(\gamma) = e^{-i\gamma H_C}
+    $$
+
+* **The Mixer Hamiltonian ($U_B$)**: This unitary, derived from a mixer Hamiltonian $H_B$, allows the quantum state to explore different possible solutions. A common choice for $H_B$ is the sum of Pauli-X operators. It is applied for a duration determined by the parameter $\beta$:
+
+    $$
+    U_B(\beta) = e^{-i\beta H_B} \quad \text{where} \quad H_B = \sum_{j=1}^{n} X_j
+    $$
+
+For a circuit with $p$ layers, the final state $|\psi_p(\boldsymbol{\gamma}, \boldsymbol{\beta})\rangle$ is prepared by applying these operators alternately:
+
+$$|\psi_p(\boldsymbol{\gamma}, \boldsymbol{\beta})\rangle = U_B(\beta_p) U_C(\gamma_p) \cdots U_B(\beta_1) U_C(\gamma_1) |\psi_0\rangle$$
+
+#### 3. Measurement and Classical Optimization
+After preparing the state, the qubits are measured in the computational basis. This process is repeated many times to estimate the expectation value $\langle\psi_p|H_C|\psi_p\rangle$. A classical computer then optimizes the parameters $(\boldsymbol{\gamma}, \boldsymbol{\beta})$ to find the set of angles that minimizes this expectation value. The resulting state corresponds to an approximate solution to the optimization problem.
+
+
+
+
