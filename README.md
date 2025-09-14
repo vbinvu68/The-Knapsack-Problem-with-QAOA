@@ -45,37 +45,74 @@ Our goal: maximize total impact without exceeding the budget.
 
 ## Our approach
 
-In our solution, we will start with tackle the challenge with smaller 5-project problem first, then try to deal with a fully-project problem. First, we will try to solve the combinatoire problem classically, we will show the limitation of this method as the number of projects increases in classical computers. In quantum computers, we will use two common methods for encoding constraints : slack variables and unbalanced penalization.
+
 
 Problem -------> QUBO representation --------> QAOA
 
 ### QUBO Formulation
 
-To solve this problem with a quantum algorithm, we must first translate it into a **QUBO (Quadratic Unconstrained Binary Optimization)** format. A QUBO is a specific type of optimization problem that uses binary variables and is the native format for many quantum computing and annealing approaches.
+To solve this problem with a quantum algorithm, we must first translate it into a **QUBO (Quadratic Unconstrained Binary Optimization)** format.  
+A QUBO is a specific type of optimization problem that uses binary variables and is the native format for many quantum computing and annealing approaches.
+
+---
 
 #### General Form
-The goal of a QUBO is to find the binary vector $\mathbf{x}$ (where each $x_i$ is either 0 or 1) that minimizes the objective function:
+
+The goal of a QUBO is to find the binary vector $\mathbf{x}$ (where each $x_i \in \{0,1\}$) that minimizes the objective function:
 
 $$
-\min_{\mathbf{x}} \mathbf{x}^T Q \mathbf{x} = \min_{\mathbf{x}} \left( \sum_{i} Q_{ii}x_i + \sum_{i<j} Q_{ij}x_i x_j \right)
+\min_{\mathbf{x}} \mathbf{x}^T Q \mathbf{x} \;=\; 
+\min_{\mathbf{x}} \left( \sum_{i} Q_{ii} x_i \;+\; \sum_{i<j} Q_{ij} x_i x_j \right)
 $$
 
 where:
-- $\mathbf{x}$ is the vector of binary decision variables ($x_i = 1$ if we select item $i$, and $0$ otherwise).
-- $Q$ is an upper-triangular matrix that encodes the problem's objective and constraints. The diagonal terms ($Q_{ii}$) represent linear costs, and the off-diagonal terms ($Q_{ij}$) represent quadratic costs.
+
+- $\mathbf{x}$ is the vector of binary decision variables ($x_i = 1$ if we select item $i$, and $0$ otherwise).  
+- $Q$ is an upper-triangular matrix that encodes the problem’s objective and constraints.  
+- The diagonal terms ($Q_{ii}$) represent linear costs, and the off-diagonal terms ($Q_{ij}$) represent quadratic costs.
+
+---
 
 #### Applying QUBO to the Knapsack Problem
+
 Our problem has two parts: an objective to maximize and a constraint to obey. Both must be encoded into the $Q$ matrix.
 
-1.  **Objective:** We want to maximize the total impact score, $\sum_i v_i x_i$. Since QUBOs are designed to *minimize*, we flip the sign and aim to minimize $-\sum_i v_i x_i$. These terms contribute to the diagonal elements of the $Q$ matrix ($Q_{ii}$).
+1. **Objective:**  
+   We want to maximize the total impact score:
 
-2.  **Constraint:** We have a budget constraint, $\sum_j w_j x_j \le W_{max}$. QUBOs are *unconstrained*, so we enforce this rule by adding a **penalty term** to our objective function. This term is designed to be zero if the constraint is satisfied and a large positive number if it's violated. A common way to do this is by introducing slack variables to create an equality, which is then squared and added to the objective with a penalty factor $\lambda$:
+   $$
+   \sum_i v_i x_i
+   $$
 
-$$
-\text{Objective}_{\text{QUBO}} = -\sum_i v_i x_i + \lambda \left( \sum_j w_j x_j + s - W_{max} \right)^2
-$$
+   Since QUBOs are designed to *minimize*, we flip the sign and aim to minimize:
 
-When expanded, this penalty term creates the quadratic ($x_i x_j$) interactions that populate the off-diagonal elements of the $Q$ matrix. By finding the binary vector $\mathbf{x}$ that minimizes this combined objective, we find the set of items that maximizes the impact score while respecting the budget.
+   $$
+   -\sum_i v_i x_i
+   $$
+
+   These terms contribute to the diagonal elements of the $Q$ matrix ($Q_{ii}$).
+
+2. **Constraint:**  
+   We have a budget constraint:
+
+   $$
+   \sum_j w_j x_j \leq W_{\text{max}}
+   $$
+
+   QUBOs are *unconstrained*, so we enforce this rule by adding a **penalty term** to our objective function.  
+   This term is designed to be zero if the constraint is satisfied and a large positive number if it’s violated.  
+
+   A common way is to introduce slack variables to turn it into an equality, then square it and add with a penalty factor $\lambda$:
+
+   $$
+   \text{Objective}_{\text{QUBO}} \;=\; -\sum_i v_i x_i \;+\; \lambda \left( \sum_j w_j x_j + s - W_{\text{max}} \right)^2
+   $$
+
+When expanded, this penalty term creates the quadratic ($x_i x_j$) interactions that populate the off-diagonal elements of the $Q$ matrix.  
+By finding the binary vector $\mathbf{x}$ that minimizes this combined objective, we obtain the set of items that maximizes the impact score while respecting the budget.
+
+
+
 ### Solving with quantum Approximate Optimization Algorithm (QAOA)
 
 The core idea is to prepare a quantum state by repeatedly applying two distinct operators: a **problem Hamiltonian** and a **mixer Hamiltonian**.
